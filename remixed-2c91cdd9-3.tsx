@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Send, Copy, Check, Mail, Sparkles, MessageSquare, User } from 'lucide-react';
 
 const TRANSLATIONS = {
@@ -99,6 +99,10 @@ export default function EmailWriterApp() {
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showContext, setShowContext] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const apiKeyInputRef = useRef(null);
 
   const tones = [
     { value: 'professional', label: t('professionalTone'), description: t('professionalDescription') },
@@ -111,33 +115,22 @@ export default function EmailWriterApp() {
 
   const generateEmail = async () => {
     if (!rawThoughts.trim()) return;
-
     setIsLoading(true);
+    setErrorMessage('');
     try {
       const contextPart = contextEmail.trim() 
         ? `\n\nContext - I am responding to this email:\n"${contextEmail}"\n\n`
         : '';
-
-      const prompt = `You are an expert email writer. Transform the following raw thoughts into a well-crafted email with a ${tone} tone.
-
-Raw thoughts: "${rawThoughts}"${contextPart}
-
-Instructions:
-- Write a complete, professional email body
-- Use a ${tone} tone throughout
-- Make it clear, engaging, and well-structured
-- Ensure proper email etiquette
-- Do not include a subject line
-
-Please respond in ${locale} language.
-
-Respond with ONLY the email body content. Do not include any explanations or additional text outside of the email.`;
-
-      const response = await window.claude.complete(prompt);
+      const prompt = `You are an expert email writer. Transform the following raw thoughts into a well-crafted email with a ${tone} tone.\n\nRaw thoughts: "${rawThoughts}"${contextPart}\n\nInstructions:\n- Write a complete, professional email body\n- Use a ${tone} tone throughout\n- Make it clear, engaging, and well-structured\n- Ensure proper email etiquette\n- Do not include a subject line\n\nPlease respond in ${locale} language.\n\nRespond with ONLY the email body content. Do not include any explanations or additional text outside of the email.`;
+      const response = await window.claude.complete(prompt, apiKey);
       setGeneratedEmail(response.trim());
     } catch (error) {
-      console.error('Error generating email:', error);
-      setGeneratedEmail('Sorry, there was an error generating your email. Please try again.');
+      if (error.message && error.message.includes('openai api credits')) {
+        setShowApiKeyModal(true);
+      } else {
+        setErrorMessage(error.message || 'Sorry, there was an error generating your email. Please try again.');
+      }
+      setGeneratedEmail('');
     } finally {
       setIsLoading(false);
     }
@@ -161,6 +154,49 @@ Respond with ONLY the email body content. Do not include any explanations or add
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {/* API Key Modal */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full relative">
+            <h2 className="text-xl font-bold mb-4 text-slate-800">Enter your OpenAI API Key</h2>
+            <div className="mb-3 text-red-600 font-semibold">Host ran out of OpenAI credits, you can use your own OpenAI API key.</div>
+            <p className="text-slate-600 mb-4 text-sm">We do not store your key. It is used only for this session and never leaves your browser except to make the OpenAI request.</p>
+            <input
+              ref={apiKeyInputRef}
+              type="password"
+              className="w-full p-3 border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500"
+              placeholder="sk-..."
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+                onClick={() => {
+                  setShowApiKeyModal(false);
+                  setTimeout(() => generateEmail(), 100); // Retry after closing modal
+                }}
+                disabled={!apiKey.trim()}
+              >
+                Use Key
+              </button>
+              <button
+                className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-lg font-semibold hover:bg-slate-300 transition"
+                onClick={() => setShowApiKeyModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-100 text-red-700 px-6 py-3 rounded-xl shadow-lg z-50">
+          {errorMessage}
+        </div>
+      )}
       {/* Header */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-indigo-600/5"></div>
