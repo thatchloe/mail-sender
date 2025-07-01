@@ -347,3 +347,15 @@ Respond with ONLY the email body content. Do not include any explanations or add
     </div>
   );
 }
+
+window.claude = {
+  complete: async (prompt) => {
+    const res = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+    const data = await res.json();
+    return data.email;
+  }
+};
